@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALD 증착특성 예측 — 구조 기반 추론 파이프라인</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FAFBFC;
+  --ink:#16222E;
+  --ink-soft:#43525F;
+  --line:#DCE2E8;
+  --thermal:#D95B1A;      /* 열공정 액센트 */
+  --thermal-soft:#FBEFE7;
+  --steel:#2F6285;        /* 보조 (데이터/화학) */
+  --steel-soft:#EAF1F6;
+  --card:#FFFFFF;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans KR',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.75;font-size:16px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:880px;margin:0 auto;padding:0 28px}
+
+/* ───────── hero ───────── */
+header{border-bottom:1px solid var(--line);padding:72px 0 56px;position:relative;overflow:hidden}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.18em;color:var(--thermal);text-transform:uppercase;margin-bottom:18px}
+h1{font-size:clamp(28px,4.5vw,42px);font-weight:700;letter-spacing:-.02em;line-height:1.3;max-width:640px}
+.sub{margin-top:20px;color:var(--ink-soft);max-width:620px;font-size:17px}
+.stack{margin-top:40px;display:flex;flex-direction:column-reverse;gap:3px;width:100%;max-width:560px}
+.stack .layer{height:9px;border-radius:2px;background:var(--steel);opacity:0;animation:dep .5s ease forwards}
+.stack .layer:nth-child(odd){background:var(--thermal)}
+@keyframes dep{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.stack-label{font-family:var(--mono);font-size:11px;color:var(--ink-soft);margin-top:10px;letter-spacing:.08em}
+@media (prefers-reduced-motion:reduce){.stack .layer{animation:none;opacity:1}}
+
+/* ───────── sections ───────── */
+section{padding:64px 0;border-bottom:1px solid var(--line)}
+.sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:14px}
+.sec-no{font-family:var(--mono);font-size:13px;color:var(--thermal);font-weight:600;letter-spacing:.1em}
+h2{font-size:25px;font-weight:700;letter-spacing:-.01em}
+.lede{color:var(--ink-soft);max-width:680px;margin-bottom:32px}
+h3{font-size:17px;font-weight:600;margin:36px 0 12px}
+p{max-width:680px;margin-bottom:16px}
+strong{font-weight:600}
+em{font-style:normal;background:linear-gradient(transparent 62%, var(--thermal-soft) 62%);padding:0 2px}
+
+/* cards */
+.grid{display:grid;gap:14px;margin:24px 0}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:680px){.g2,.g3{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px 22px}
+.card .k{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;color:var(--steel);text-transform:uppercase;margin-bottom:8px;font-weight:600}
+.card .v{font-size:14.5px;color:var(--ink-soft);line-height:1.65}
+.card .v b{color:var(--ink);font-weight:600}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tag{font-family:var(--mono);font-size:12px;background:var(--steel-soft);color:var(--steel);border-radius:4px;padding:2px 8px}
+.tag.hot{background:var(--thermal-soft);color:var(--thermal)}
+
+/* callout */
+.callout{border-left:3px solid var(--thermal);background:var(--thermal-soft);border-radius:0 10px 10px 0;padding:18px 22px;margin:26px 0;max-width:680px}
+.callout .t{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;color:var(--thermal);font-weight:600;margin-bottom:6px}
+.callout p{margin:0;font-size:15px}
+.callout.blue{border-color:var(--steel);background:var(--steel-soft)}
+.callout.blue .t{color:var(--steel)}
+
+/* figure */
+figure{margin:30px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:26px 22px}
+figcaption{font-family:var(--mono);font-size:12px;color:var(--ink-soft);margin-top:14px;line-height:1.6;letter-spacing:.02em;border-top:1px dashed var(--line);padding-top:12px}
+figure svg{width:100%;height:auto;display:block}
+.svg-txt{font-family:var(--mono)}
+
+/* table */
+table{width:100%;border-collapse:collapse;font-size:14px;margin:20px 0}
+th{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);text-align:left;padding:10px 12px;border-bottom:2px solid var(--ink);font-weight:600}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-soft)}
+td:first-child{color:var(--ink);font-weight:500;white-space:nowrap}
+.mono{font-family:var(--mono);font-size:13px}
+
+/* references */
+.ref{font-size:14px;color:var(--ink-soft);padding:14px 0;border-bottom:1px solid var(--line);max-width:760px}
+.ref .no{font-family:var(--mono);color:var(--thermal);font-weight:600;margin-right:10px}
+.ref a{color:var(--steel);text-decoration:none;border-bottom:1px solid var(--steel-soft);word-break:break-all}
+.ref a:hover{border-color:var(--steel)}
+.ref .note{display:block;margin-top:4px;font-size:13px}
+
+footer{padding:48px 0 80px;color:var(--ink-soft);font-size:13px;font-family:var(--mono)}
+
+/* toc */
+nav{padding:28px 0;border-bottom:1px solid var(--line)}
+nav ol{list-style:none;display:flex;flex-wrap:wrap;gap:8px 22px}
+nav a{font-family:var(--mono);font-size:13px;color:var(--ink-soft);text-decoration:none}
+nav a:hover{color:var(--thermal)}
+nav a span{color:var(--thermal);margin-right:6px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--thermal);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">ALD Deposition Property Prediction · Concept Note</div>
+    <h1>분자 구조로부터 GPC와 ALD Window를 추론하는<br>화학 기반 예측 파이프라인</h1>
+    <p class="sub">DFT + kMC의 전산 비용 없이, <strong>구조 유사성 → 메커니즘 유사성 → 증착특성 유사성</strong>이라는 화학적 인과 사슬과 문헌 데이터(Graph DB Retrieval)를 결합해 미지 전구체의 증착특성을 추정한다. 대상 공정은 Thermal ALD.</p>
+    <div class="stack" aria-hidden="true">
+      <div class="layer" style="animation-delay:.05s"></div>
+      <div class="layer" style="animation-delay:.25s"></div>
+      <div class="layer" style="animation-delay:.45s"></div>
+      <div class="layer" style="animation-delay:.65s"></div>
+      <div class="layer" style="animation-delay:.85s"></div>
+      <div class="layer" style="animation-delay:1.05s"></div>
+    </div>
+    <div class="stack-label">layer-by-layer · self-limiting growth</div>
+  </div>
+</header>
+
+<nav class="wrap" aria-label="목차">
+  <ol>
+    <li><a href="#s1"><span>01</span>문제 정의</a></li>
+    <li><a href="#s2"><span>02</span>핵심 가설</a></li>
+    <li><a href="#s3"><span>03</span>숨겨진 변수</a></li>
+    <li><a href="#s4"><span>04</span>Shape의 결정력</a></li>
+    <li><a href="#s5"><span>05</span>Descriptor 분류체계</a></li>
+    <li><a href="#s6"><span>06</span>예측 파이프라인</a></li>
+    <li><a href="#s7"><span>07</span>공정 변수 노트</a></li>
+    <li><a href="#s8"><span>08</span>근거 문헌</a></li>
+  </ol>
+</nav>
+
+<!-- ───────────────────────── 01 ───────────────────────── -->
+<section id="s1">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">01</span><h2>문제 정의 — 왜 DFT가 아니라 유사성 기반 추론인가</h2></div>
+    <p class="lede">예측 목표는 <strong>GPC(Growth Per Cycle)</strong>와 <strong>ALD Window(자기제한 성장이 유지되는 온도 구간)</strong> 두 가지다. 이를 제일원리(DFT)로 직접 풀어내는 접근은 현재 기술 수준에서 현실성이 낮다.</p>
+
+    <div class="grid g3">
+      <div class="card">
+        <div class="k">DFT 경로의 한계</div>
+        <div class="v">전구체의 <b>분해 경로(decomposition pathway)</b>를 파악해 리간드별 세부 분자구조 시나리오를 모두 생성하는 것은 조합적으로 폭발한다. 표면 상태·중간체까지 포함하면 계산량이 감당 불가.</div>
+      </div>
+      <div class="card">
+        <div class="k">데이터의 한계</div>
+        <div class="v">AtomicLimits, CatalysisHub 등 공정 특화 DB와 논문이 있지만 <b>모든 소재가 존재하지 않고</b>, 장비·압력·노출시간 등 실험조건이 제각각인 <b>empirical 데이터</b>다. 단순 lookup으론 일반화가 안 된다.</div>
+      </div>
+      <div class="card">
+        <div class="k">공정 범위의 선택</div>
+        <div class="v">플라즈마(PEALD)는 전하·라디칼 등 전기적 변수가 개입해 화학 구조만으로 설명이 어렵다. <b>Thermal ALD로 한정</b>하면 표면 화학반응이 지배 변수가 되어 구조 기반 추론의 신뢰성이 올라간다.</div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <div class="t">접근 전략</div>
+      <p>물리 시뮬레이션 대신, <strong>"구조가 비슷하면 증착특성이 비슷하다"</strong>는 화학적 유사성 원리를 축으로 삼는다. ① 분자 구조를 화학적으로 의미 있는 descriptor로 분해하고 ② Graph DB에서 구조적으로 유사한 기보고 물질을 검색해 ③ 문헌의 실측 GPC / ALD Window를 근거로 미지 물질의 값을 추정한다. 실제로 GPC의 상한은 전구체의 화학과 구조에 의해 지배적으로 결정된다는 것이 정설이다.<sup>[2]</sup></p>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── 02 ───────────────────────── -->
+<section id="s2">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">02</span><h2>핵심 가설 — 인과의 방향을 바로잡기</h2></div>
+    <p class="lede">처음 세웠던 명제는 <em>"활성화에너지(Ea)가 비슷하면 구조가 비슷하고, 증착특성이 비슷하다"</em>였다. 대체로 맞지만 <strong>인과의 방향이 반대</strong>다. Ea는 원인이 아니라 구조의 결과다.</p>
+
+    <figure>
+      <svg viewBox="0 0 760 270" role="img" aria-label="구조에서 증착특성으로 이어지는 인과 사슬 다이어그램">
+        <!-- wrong direction -->
+        <text x="0" y="18" class="svg-txt" font-size="12" fill="#B91C1C" letter-spacing="2">✕ 처음의 가설 (역방향)</text>
+        <g font-family="IBM Plex Mono" font-size="13">
+          <rect x="0" y="32" width="150" height="44" rx="8" fill="none" stroke="#C9A0A0" stroke-dasharray="4 3"/>
+          <text x="75" y="59" text-anchor="middle" fill="#8C5A5A">Ea가 비슷</text>
+          <rect x="220" y="32" width="150" height="44" rx="8" fill="none" stroke="#C9A0A0" stroke-dasharray="4 3"/>
+          <text x="295" y="59" text-anchor="middle" fill="#8C5A5A">구조가 비슷</text>
+          <rect x="440" y="32" width="190" height="44" rx="8" fill="none" stroke="#C9A0A0" stroke-dasharray="4 3"/>
+          <text x="535" y="59" text-anchor="middle" fill="#8C5A5A">증착특성이 비슷</text>
+          <path d="M155 54 H213" stroke="#C9A0A0" stroke-dasharray="4 3" fill="none"/>
+          <path d="M213 54 l-8 -4 v8 z" fill="#C9A0A0"/>
+          <path d="M375 54 H433" stroke="#C9A0A0" stroke-dasharray="4 3" fill="none"/>
+          <path d="M433 54 l-8 -4 v8 z" fill="#C9A0A0"/>
+        </g>
+        <!-- correct direction -->
+        <text x="0" y="130" class="svg-txt" font-size="12" fill="#D95B1A" letter-spacing="2">✓ 올바른 인과 사슬</text>
+        <g font-family="IBM Plex Mono" font-size="13" font-weight="600">
+          <rect x="0" y="146" width="160" height="76" rx="8" fill="#EAF1F6" stroke="#2F6285"/>
+          <text x="80" y="180" text-anchor="middle" fill="#16222E">구조가</text>
+          <text x="80" y="200" text-anchor="middle" fill="#16222E">비슷하다</text>
+
+          <rect x="200" y="146" width="160" height="76" rx="8" fill="#EAF1F6" stroke="#2F6285"/>
+          <text x="280" y="180" text-anchor="middle" fill="#16222E">반응 메커니즘이</text>
+          <text x="280" y="200" text-anchor="middle" fill="#16222E">비슷하다</text>
+
+          <rect x="400" y="146" width="160" height="76" rx="8" fill="#EAF1F6" stroke="#2F6285"/>
+          <text x="480" y="180" text-anchor="middle" fill="#16222E">Ea·물성이</text>
+          <text x="480" y="200" text-anchor="middle" fill="#16222E">비슷하다</text>
+
+          <rect x="600" y="146" width="160" height="76" rx="8" fill="#FBEFE7" stroke="#D95B1A" stroke-width="1.5"/>
+          <text x="680" y="180" text-anchor="middle" fill="#D95B1A">증착특성이</text>
+          <text x="680" y="200" text-anchor="middle" fill="#D95B1A">비슷하다</text>
+
+          <g stroke="#2F6285" fill="#2F6285">
+            <path d="M163 184 H192" fill="none"/><path d="M196 184 l-9 -4.5 v9 z"/>
+            <path d="M363 184 H392" fill="none"/><path d="M396 184 l-9 -4.5 v9 z"/>
+            <path d="M563 184 H592" fill="none"/><path d="M596 184 l-9 -4.5 v9 z"/>
+          </g>
+        </g>
+        <text x="0" y="252" font-family="IBM Plex Sans KR" font-size="12.5" fill="#43525F">"Ea가 비슷해서 구조가 비슷"이 아니라, "구조가 비슷해서 Ea가 비슷"한 것 — 구조가 상류(root) 변수다.</text>
+      </svg>
+      <figcaption>FIG.1 — 인과 사슬의 방향. 검색·예측의 기준(query key)은 Ea가 아니라 구조(descriptor)여야 한다.</figcaption>
+    </figure>
+
+    <p>이 방향성이 중요한 실용적 이유: <strong>Ea는 측정·계산이 어렵고 데이터가 희소</strong>하지만, <strong>구조는 mol file만 있으면 항상 얻을 수 있다</strong>. 인과의 상류에 있으면서 가용성도 가장 높은 변수를 유사성 검색의 키로 쓰는 것이 옳다.</p>
+    <p>또 하나의 화학적 근거: 압력 등 공정 조건이 바뀌어도 <strong>흡착·탈착·리간드 교환·확산 각 소반응(elementary step)의 활성화 에너지 자체는 변하지 않는다</strong>. Ea는 분자–표면 조합의 고유 속성이므로, 구조가 같은 계열이면 공정 장비가 달라도 반응 장벽의 패턴은 이식(transfer)된다. 이것이 "장비·조건이 제각각인 empirical 문헌 데이터"를 그래도 묶어 쓸 수 있게 해주는 이론적 다리다.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── 03 ───────────────────────── -->
+<section id="s3">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">03</span><h2>숨겨진 변수 — ALD 특성은 단일 Ea의 함수가 아니다</h2></div>
+    <p class="lede">GPC와 ALD Window는 하나의 활성화 에너지가 아니라, 분자 구조가 만들어내는 <strong>여러 잠재 물성(hidden variables)의 종합 결과</strong>다. 모델은 이 구조를 반영해야 한다.</p>
+
+    <figure>
+      <svg viewBox="0 0 760 360" role="img" aria-label="구조가 7개의 숨겨진 물성을 거쳐 GPC와 ALD Window를 결정하는 다이어그램">
+        <g font-family="IBM Plex Mono">
+          <rect x="0" y="140" width="140" height="80" rx="8" fill="#16222E"/>
+          <text x="70" y="175" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">분자 구조</text>
+          <text x="70" y="195" text-anchor="middle" fill="#9FB2C2" font-size="11">Mol / Graph</text>
+
+          <!-- hidden vars -->
+          <g font-size="12">
+            <rect x="250" y="8"   width="260" height="38" rx="6" fill="#EAF1F6" stroke="#2F6285"/><text x="380" y="32" text-anchor="middle" fill="#16222E">① Ligand exchange Ea</text>
+            <rect x="250" y="56"  width="260" height="38" rx="6" fill="#EAF1F6" stroke="#2F6285"/><text x="380" y="80" text-anchor="middle" fill="#16222E">② Adsorption Ea</text>
+            <rect x="250" y="104" width="260" height="38" rx="6" fill="#EAF1F6" stroke="#2F6285"/><text x="380" y="128" text-anchor="middle" fill="#16222E">③ Decomposition Ea</text>
+            <rect x="250" y="152" width="260" height="38" rx="6" fill="#EAF1F6" stroke="#2F6285"/><text x="380" y="176" text-anchor="middle" fill="#16222E">④ 열분해 온도 Td</text>
+            <rect x="250" y="200" width="260" height="38" rx="6" fill="#EAF1F6" stroke="#2F6285"/><text x="380" y="224" text-anchor="middle" fill="#16222E">⑤ 휘발성 (Vapor Pressure)</text>
+            <rect x="250" y="248" width="260" height="38" rx="6" fill="#EAF1F6" stroke="#2F6285"/><text x="380" y="272" text-anchor="middle" fill="#16222E">⑥ Surface packing</text>
+            <rect x="250" y="296" width="260" height="38" rx="6" fill="#EAF1F6" stroke="#2F6285"/><text x="380" y="320" text-anchor="middle" fill="#16222E">⑦ Steric hindrance</text>
+          </g>
+
+          <!-- outputs -->
+          <rect x="620" y="100" width="140" height="64" rx="8" fill="#FBEFE7" stroke="#D95B1A" stroke-width="1.5"/>
+          <text x="690" y="128" text-anchor="middle" fill="#D95B1A" font-size="14" font-weight="600">GPC</text>
+          <text x="690" y="148" text-anchor="middle" fill="#B14A15" font-size="10.5">Å / cycle</text>
+          <rect x="620" y="196" width="140" height="64" rx="8" fill="#FBEFE7" stroke="#D95B1A" stroke-width="1.5"/>
+          <text x="690" y="224" text-anchor="middle" fill="#D95B1A" font-size="14" font-weight="600">ALD Window</text>
+          <text x="690" y="244" text-anchor="middle" fill="#B14A15" font-size="10.5">T range, °C</text>
+
+          <!-- fan-out lines -->
+          <g stroke="#9FB2C2" fill="none" stroke-width="1.2">
+            <path d="M140 180 C 200 180 200 27 246 27"/>
+            <path d="M140 180 C 200 180 200 75 246 75"/>
+            <path d="M140 180 C 200 180 200 123 246 123"/>
+            <path d="M140 180 H 246"/>
+            <path d="M140 180 C 200 180 200 219 246 219"/>
+            <path d="M140 180 C 200 180 200 267 246 267"/>
+            <path d="M140 180 C 200 180 200 315 246 315"/>
+          </g>
+          <!-- fan-in lines -->
+          <g stroke="#E0A985" fill="none" stroke-width="1.2">
+            <path d="M510 27  C 575 27  575 132 616 132"/>
+            <path d="M510 75  C 575 75  575 132 616 132"/>
+            <path d="M510 219 C 575 219 575 132 616 132"/>
+            <path d="M510 267 C 575 267 575 132 616 132"/>
+            <path d="M510 315 C 575 315 575 140 616 140"/>
+            <path d="M510 123 C 575 123 575 228 616 228"/>
+            <path d="M510 171 C 575 171 575 228 616 228"/>
+            <path d="M510 27  C 580 27  580 220 616 220"/>
+          </g>
+        </g>
+      </svg>
+      <figcaption>FIG.2 — 구조 → 잠재 물성(7) → 증착특성. ①②⑤⑥⑦은 주로 GPC(흡착 밀도·커버리지)를, ③④는 ALD Window의 상한(분해 시작)을, ①②⑤는 하한(반응 개시·응축 한계)을 지배한다.</figcaption>
+    </figure>
+
+    <h3>각 변수가 ALD Window를 만드는 방식</h3>
+    <figure>
+      <svg viewBox="0 0 760 300" role="img" aria-label="온도에 따른 GPC 곡선과 ALD window">
+        <g font-family="IBM Plex Mono" font-size="11.5">
+          <!-- axes -->
+          <line x1="60" y1="240" x2="720" y2="240" stroke="#16222E" stroke-width="1.5"/>
+          <line x1="60" y1="240" x2="60" y2="30" stroke="#16222E" stroke-width="1.5"/>
+          <text x="30" y="140" transform="rotate(-90 30 140)" text-anchor="middle" fill="#43525F">GPC (Å/cycle)</text>
+          <text x="390" y="288" text-anchor="middle" fill="#43525F">증착 온도 T (°C)</text>
+          <!-- window band -->
+          <rect x="280" y="30" width="220" height="210" fill="#FBEFE7"/>
+          <text x="390" y="55" text-anchor="middle" fill="#D95B1A" font-weight="600" font-size="13">ALD Window</text>
+          <text x="390" y="72" text-anchor="middle" fill="#B14A15" font-size="10.5">자기제한 · GPC 평탄</text>
+          <!-- curve -->
+          <path d="M70 235 C 150 235 200 130 280 122 L 500 118 C 570 116 620 60 700 45"
+                fill="none" stroke="#2F6285" stroke-width="2.5"/>
+          <path d="M70 150 C 130 165 200 130 280 122" fill="none" stroke="#2F6285" stroke-width="2.5" stroke-dasharray="5 4" opacity=".55"/>
+          <!-- annotations -->
+          <text x="150" y="105" fill="#2F6285" font-size="11">응축 (condensation)</text>
+          <text x="130" y="215" fill="#2F6285" font-size="11">반응 불충분</text>
+          <text x="125" y="230" fill="#7E93A4" font-size="10">낮은 reactivity · Ea 미달</text>
+          <text x="585" y="100" fill="#2F6285" font-size="11">열분해 (CVD성 성장)</text>
+          <text x="600" y="115" fill="#7E93A4" font-size="10">T &gt; Td → 자기제한 붕괴</text>
+          <!-- boundary labels -->
+          <line x1="280" y1="240" x2="280" y2="246" stroke="#16222E"/>
+          <line x1="500" y1="240" x2="500" y2="246" stroke="#16222E"/>
+          <text x="280" y="262" text-anchor="middle" fill="#D95B1A">T_low ← ②⑤ (Adsorption Ea·VP)</text>
+          <text x="500" y="262" text-anchor="middle" fill="#D95B1A">T_high ← ③④ (Decomp. Ea·Td)</text>
+        </g>
+      </svg>
+      <figcaption>FIG.3 — ALD Window의 양끝은 서로 다른 숨겨진 변수가 결정한다. 하한은 반응 개시(흡착·리간드 교환 Ea)와 응축 한계, 상한은 전구체 열분해(Td)가 지배한다. 따라서 Td 예측 모델은 Window 상한 추정의 직접 feature가 된다.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ───────────────────────── 04 ───────────────────────── -->
+<section id="s4">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">04</span><h2>Shape의 결정력 — Ea가 같아도 GPC는 다르다</h2></div>
+    <p class="lede">에너지 관점만으로는 GPC를 설명할 수 없다. <strong>같은 Td(300°C), 같은 Ea(0.6 eV)</strong>를 가진 두 전구체도, 리간드의 부피가 다르면 표면에서 점유 가능한 site 수가 달라져 완전히 다른 GPC를 보인다.</p>
+
+    <figure>
+      <svg viewBox="0 0 760 330" role="img" aria-label="작은 리간드와 부피 큰 리간드의 표면 점유 비교">
+        <g font-family="IBM Plex Mono">
+          <!-- Molecule A -->
+          <text x="180" y="24" text-anchor="middle" font-size="13" font-weight="600" fill="#16222E">Molecule A — small ligand</text>
+          <text x="180" y="42" text-anchor="middle" font-size="11" fill="#43525F">Td 300°C · Ea 0.6 eV</text>
+          <g fill="#2F6285">
+            <!-- 10x5 grid of small dots -->
+            <g id="rowA">
+              <circle cx="65" cy="70" r="9"/><circle cx="90" cy="70" r="9"/><circle cx="115" cy="70" r="9"/><circle cx="140" cy="70" r="9"/><circle cx="165" cy="70" r="9"/><circle cx="190" cy="70" r="9"/><circle cx="215" cy="70" r="9"/><circle cx="240" cy="70" r="9"/><circle cx="265" cy="70" r="9"/><circle cx="290" cy="70" r="9"/>
+            </g>
+            <use href="#rowA" y="26"/><use href="#rowA" y="52"/><use href="#rowA" y="78"/><use href="#rowA" y="104"/>
+          </g>
+          <rect x="50" y="190" width="260" height="10" fill="#16222E" rx="2"/>
+          <text x="180" y="222" text-anchor="middle" font-size="12" fill="#16222E" font-weight="600">~100 sites 점유</text>
+          <text x="180" y="242" text-anchor="middle" font-size="11.5" fill="#D95B1A" font-weight="600">→ 높은 coverage · 높은 GPC</text>
+
+          <!-- Molecule B -->
+          <text x="570" y="24" text-anchor="middle" font-size="13" font-weight="600" fill="#16222E">Molecule B — bulky ligand</text>
+          <text x="570" y="42" text-anchor="middle" font-size="11" fill="#43525F">Td 300°C · Ea 0.6 eV (동일)</text>
+          <g fill="none" stroke="#2F6285" stroke-width="2">
+            <circle cx="490" cy="90" r="26"/><circle cx="556" cy="90" r="26"/><circle cx="622" cy="90" r="26"/><circle cx="688" cy="90" r="26"/>
+            <circle cx="523" cy="150" r="26"/><circle cx="589" cy="150" r="26"/><circle cx="655" cy="150" r="26"/>
+          </g>
+          <g fill="#2F6285">
+            <circle cx="490" cy="90" r="6"/><circle cx="556" cy="90" r="6"/><circle cx="622" cy="90" r="6"/><circle cx="688" cy="90" r="6"/>
+            <circle cx="523" cy="150" r="6"/><circle cx="589" cy="150" r="6"/><circle cx="655" cy="150" r="6"/>
+          </g>
+          <rect x="460" y="190" width="260" height="10" fill="#16222E" rx="2"/>
+          <text x="570" y="222" text-anchor="middle" font-size="12" fill="#16222E" font-weight="600">~40 sites 점유 (입체장애로 차폐)</text>
+          <text x="570" y="242" text-anchor="middle" font-size="11.5" fill="#D95B1A" font-weight="600">→ 낮은 coverage · 낮은 GPC</text>
+
+          <text x="380" y="290" text-anchor="middle" font-size="12.5" fill="#43525F" font-family="IBM Plex Sans KR">에너지 descriptor가 동일해도 Shape descriptor가 다르면 완전히 다른 전구체다.</text>
+          <text x="380" y="312" text-anchor="middle" font-size="11.5" fill="#7E93A4" font-family="IBM Plex Sans KR">∴ 유사성 검색은 (에너지 × 형태) 2축에서 동시에 이루어져야 한다.</text>
+        </g>
+      </svg>
+      <figcaption>FIG.4 — 동일 에너지, 상이한 형상. 실제로 전구체의 크기·형상 기반 RSA(Random Sequential Adsorption) 모델만으로 문헌 GPC를 평균 0.05 Å 오차로 재현한 연구가 보고되어 있으며, 무작위 흡착에 의한 포화 커버리지는 이상적 조밀 packing 대비 22–40% 낮다.<sup>[3]</sup></p></figcaption>
+    </figure>
+
+    <div class="callout blue">
+      <div class="t">시사점 — 왜 단순 fingerprint로는 부족한가</div>
+      <p>Morgan fingerprint 같은 범용 구조 지문은 "원자 연결 패턴"의 유사성만 본다. ALD에서는 <strong>금속 중심, 리간드 계열, 떨어져 나가는 그룹(leaving group), 분자 부피/형상, 열물성</strong>이 각각 다른 증착 변수를 지배하므로, 이들을 <strong>분리된 feature 축으로 명시적으로 분류</strong>해야 화학적으로 의미 있는 유사도가 계산된다. 이는 실제 ALD 연구자의 직관("Hf amide 계열이네 → TEMAHf랑 비슷하겠는데 → Td는 좀 높고 GPC는 약간 낮겠다")을 그대로 형식화한 것이기도 하다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── 05 ───────────────────────── -->
+<section id="s5">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">05</span><h2>Descriptor 분류체계 — 유사도의 좌표축</h2></div>
+    <p class="lede">Graph DB 유사성 검색과 ML feature에 공통으로 쓰일 6개 축. 각 축은 특정 증착 변수와 화학적으로 연결되어 있다.</p>
+
+    <div class="grid g3">
+      <div class="card">
+        <div class="k">① Metal Center</div>
+        <div class="v">증착되는 막질과 결합 화학의 기본 골격. 같은 금속이면 표면 –OH와의 반응 화학이 공유된다.</div>
+        <div class="tags"><span class="tag">Al</span><span class="tag">Hf</span><span class="tag">Zr</span><span class="tag">Ti</span><span class="tag">Ta</span><span class="tag">Ru</span><span class="tag">Co</span></div>
+      </div>
+      <div class="card">
+        <div class="k">② Ligand Family</div>
+        <div class="v">반응 메커니즘(리간드 교환 vs 연소형)과 Ea 패턴을 결정하는 핵심 축. 계열 내에서 증착특성이 군집을 이룬다.</div>
+        <div class="tags"><span class="tag">Amide</span><span class="tag">Alkyl</span><span class="tag">Cp</span><span class="tag">Alkoxide</span><span class="tag">Halide</span><span class="tag">Amidinate</span><span class="tag">Guanidinate</span></div>
+      </div>
+      <div class="card">
+        <div class="k">③ Leaving Group</div>
+        <div class="v">표면 반응에서 탈리되는 부산물의 화학. 부산물 독성·재흡착·식각성(HCl 등)과 반응 가역성을 좌우.</div>
+        <div class="tags"><span class="tag">CH₃</span><span class="tag">Cl</span><span class="tag">NMe₂</span><span class="tag">NEt₂</span><span class="tag">Cp</span></div>
+      </div>
+      <div class="card">
+        <div class="k">④ Reactant Family</div>
+        <div class="v">동일 전구체도 co-reactant에 따라 GPC·Window가 달라진다. 검색 시 반드시 (precursor, reactant) 쌍으로 매칭.</div>
+        <div class="tags"><span class="tag">H₂O</span><span class="tag">O₃</span><span class="tag">NH₃</span><span class="tag hot">Plasma — 제외</span></div>
+      </div>
+      <div class="card">
+        <div class="k">⑤ Shape Descriptors</div>
+        <div class="v">Surface packing·steric hindrance를 정량화 → <b>GPC 상한</b>과 직결. RDKit 3D conformer에서 계산.</div>
+        <div class="tags"><span class="tag">Mol. Volume</span><span class="tag">Radius of Gyration</span><span class="tag">SASA</span><span class="tag">Sterimol B1/B5/L</span></div>
+      </div>
+      <div class="card">
+        <div class="k">⑥ Thermal Descriptors</div>
+        <div class="v">기화 가능성과 분해 한계 → <b>ALD Window의 상·하한</b>과 직결. 자체 Td 예측 모델이 이 축의 핵심 feature.</div>
+        <div class="tags"><span class="tag">Td</span><span class="tag">Vapor Pressure</span><span class="tag">BP / 승화온도</span></div>
+      </div>
+    </div>
+
+    <p style="margin-top:8px">참고로 열물성 축의 학습 가능성은 이미 검증되어 있다. 문헌에서 수집한 유기금속 전구체 데이터에 화학정보학 descriptor + Random Forest/NN을 적용해 <strong>증발/승화 온도를 평균 ±9°C 정확도로 예측</strong>한 산업 사례(Schrödinger)가 보고되어 있다.<sup>[4]</sup> 자체 Td 예측 모델은 같은 계열의 접근이며, 파이프라인 전체에서 가장 강력한 단일 feature가 될 수 있다.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── 06 ───────────────────────── -->
+<section id="s6">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">06</span><h2>예측 파이프라인 아키텍처</h2></div>
+    <p class="lede">입력은 precursor의 mol file 하나. 구조 분해 → 분류 → 물성 예측 → 유사성 검색 → 문헌 근거 결합의 순서로 GPC와 ALD Window를 출력한다.</p>
+
+    <figure>
+      <svg viewBox="0 0 760 700" role="img" aria-label="Mol file에서 GPC, ALD Window 예측까지의 파이프라인 흐름도">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#43525F"/></marker>
+        </defs>
+        <g font-family="IBM Plex Mono" font-size="13">
+          <!-- column spine x=240 width 280 -->
+          <!-- 1 input -->
+          <rect x="240" y="10" width="280" height="50" rx="8" fill="#16222E"/>
+          <text x="380" y="33" text-anchor="middle" fill="#fff" font-weight="600">Precursor Mol File</text>
+          <text x="380" y="50" text-anchor="middle" fill="#9FB2C2" font-size="10.5">.mol / SMILES 입력</text>
+
+          <!-- 2 rdkit -->
+          <rect x="240" y="92" width="280" height="50" rx="8" fill="#fff" stroke="#2F6285"/>
+          <text x="380" y="115" text-anchor="middle" fill="#16222E" font-weight="600">RDKit 파싱 · 3D Conformer</text>
+          <text x="380" y="132" text-anchor="middle" fill="#7E93A4" font-size="10.5">구조 정규화, 좌표 생성</text>
+
+          <!-- 3 extraction -->
+          <rect x="240" y="174" width="280" height="50" rx="8" fill="#fff" stroke="#2F6285"/>
+          <text x="380" y="197" text-anchor="middle" fill="#16222E" font-weight="600">Functional Group Extraction</text>
+          <text x="380" y="214" text-anchor="middle" fill="#7E93A4" font-size="10.5">metal center · 결합 환경 식별</text>
+
+          <!-- 4 classification: two side-by-side -->
+          <rect x="150" y="256" width="220" height="50" rx="8" fill="#EAF1F6" stroke="#2F6285"/>
+          <text x="260" y="279" text-anchor="middle" fill="#16222E" font-weight="600">Ligand Classification</text>
+          <text x="260" y="296" text-anchor="middle" fill="#7E93A4" font-size="10.5">Amide / Alkyl / Cp / …</text>
+          <rect x="390" y="256" width="220" height="50" rx="8" fill="#EAF1F6" stroke="#2F6285"/>
+          <text x="500" y="279" text-anchor="middle" fill="#16222E" font-weight="600">Leaving Group 분류</text>
+          <text x="500" y="296" text-anchor="middle" fill="#7E93A4" font-size="10.5">CH₃ / Cl / NMe₂ / …</text>
+
+          <!-- 5 descriptors: two side-by-side -->
+          <rect x="150" y="338" width="220" height="50" rx="8" fill="#EAF1F6" stroke="#2F6285"/>
+          <text x="260" y="361" text-anchor="middle" fill="#16222E" font-weight="600">Shape Descriptor 계산</text>
+          <text x="260" y="378" text-anchor="middle" fill="#7E93A4" font-size="10.5">Volume · Rg · SASA · Sterimol</text>
+          <rect x="390" y="338" width="220" height="50" rx="8" fill="#FBEFE7" stroke="#D95B1A"/>
+          <text x="500" y="361" text-anchor="middle" fill="#16222E" font-weight="600">Td 예측 모델 (자체)</text>
+          <text x="500" y="378" text-anchor="middle" fill="#B14A15" font-size="10.5">열안정성 → Window 상한 feature</text>
+
+          <!-- 6 graph db -->
+          <rect x="240" y="420" width="280" height="56" rx="8" fill="#fff" stroke="#2F6285" stroke-width="1.5"/>
+          <text x="380" y="444" text-anchor="middle" fill="#16222E" font-weight="600">Graph DB Similarity Search</text>
+          <text x="380" y="462" text-anchor="middle" fill="#7E93A4" font-size="10.5">6축 descriptor 가중 유사도 · (precursor, reactant) 쌍 매칭</text>
+
+          <!-- side: literature db -->
+          <rect x="20" y="412" width="180" height="72" rx="8" fill="#F2F5F7" stroke="#9FB2C2" stroke-dasharray="5 4"/>
+          <text x="110" y="438" text-anchor="middle" fill="#43525F" font-weight="600" font-size="11.5">문헌 데이터 수집</text>
+          <text x="110" y="456" text-anchor="middle" fill="#7E93A4" font-size="10.5">AtomicLimits DB</text>
+          <text x="110" y="472" text-anchor="middle" fill="#7E93A4" font-size="10.5">CatalysisHub · 논문 추출</text>
+
+          <!-- 7 retrieval -->
+          <rect x="240" y="508" width="280" height="50" rx="8" fill="#fff" stroke="#2F6285"/>
+          <text x="380" y="531" text-anchor="middle" fill="#16222E" font-weight="600">Literature Retrieval</text>
+          <text x="380" y="548" text-anchor="middle" fill="#7E93A4" font-size="10.5">유사 물질의 실측 GPC·Window·조건 회수</text>
+
+          <!-- 8 ML -->
+          <rect x="240" y="590" width="280" height="50" rx="8" fill="#fff" stroke="#2F6285"/>
+          <text x="380" y="613" text-anchor="middle" fill="#16222E" font-weight="600">ML 추정 + 근거 결합</text>
+          <text x="380" y="630" text-anchor="middle" fill="#7E93A4" font-size="10.5">descriptor 회귀 × 유사 사례 보간 앙상블</text>
+
+          <!-- 9 output -->
+          <rect x="240" y="660" width="280" height="34" rx="8" fill="#D95B1A"/>
+          <text x="380" y="682" text-anchor="middle" fill="#fff" font-weight="600">GPC · ALD Window (+신뢰구간·근거 논문)</text>
+
+          <!-- arrows -->
+          <g stroke="#43525F" fill="none" marker-end="url(#ar)">
+            <path d="M380 60 V88"/>
+            <path d="M380 142 V170"/>
+            <path d="M380 224 V236 M380 236"/>
+            <path d="M380 224 C380 240 260 238 260 252"/>
+            <path d="M380 224 C380 240 500 238 500 252"/>
+            <path d="M260 306 V334"/>
+            <path d="M500 306 V334"/>
+            <path d="M260 388 C260 404 380 402 380 416"/>
+            <path d="M500 388 C500 404 380 402 380 416"/>
+            <path d="M200 448 H236"/>
+            <path d="M380 476 V504"/>
+            <path d="M380 558 V586"/>
+            <path d="M380 640 V656"/>
+          </g>
+        </g>
+      </svg>
+      <figcaption>FIG.5 — 전체 아키텍처. 좌측의 문헌 DB는 Graph DB의 노드(물질·공정·논문)와 엣지(유사도·보고관계)를 채우는 소스다. AtomicLimits ALD Database는 TU/e가 큐레이션하는 crowdsourced DB로 약 3,800개 고유 DOI 규모의 thermal/plasma ALD 공정을 정리하고 있어<sup>[1]</sup> 초기 그래프 구축에 가장 적합하다.</figcaption>
+    </figure>
+
+    <h3>출력 설계 원칙</h3>
+    <p>empirical 데이터 기반 추정이므로, 예측값은 단일 숫자가 아니라 <strong>① 추정치 ② 신뢰구간 ③ 근거가 된 유사 물질·논문 목록</strong>의 3요소로 제공한다. "TEMAHf와 ligand family·shape가 92% 유사 → GPC 0.9–1.1 Å/cycle, Window 200–300°C 추정 (근거: 논문 N편)" 형태가 되어야 연구자가 검증·신뢰할 수 있다. 이는 ML in ALD 분야 리뷰들이 공통으로 지적하는 "데이터 희소·조건 이질성 환경에서의 불확실성 정량화" 요구와도 일치한다.<sup>[5]</sup></p>
+  </div>
+</section>
+
+<!-- ───────────────────────── 07 ───────────────────────── -->
+<section id="s7">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">07</span><h2>공정 변수 노트 — 압력·농도·온도의 관계</h2></div>
+    <p class="lede">문헌 데이터를 정규화할 때 알아야 할 공정 물리. 같은 물질이라도 보고된 조건이 다르면 GPC·Window가 다르게 읽히기 때문이다.</p>
+
+    <div class="grid g2">
+      <div class="card">
+        <div class="k">부분압 = 유효 농도</div>
+        <div class="v">반응물 농도는 부분압(partial pressure)과 직결된다. <b>1 Torr에서의 노출이 0.5 Torr에서보다 단위시간당 표면 충돌 빈도(flux)가 높아</b> 표면 포화가 더 빠르고 활발하다. 따라서 dose time·압력이 다른 논문 간 GPC 비교 시 "포화 도달 여부"를 먼저 판별해야 한다.</div>
+      </div>
+      <div class="card">
+        <div class="k">ALD는 표면반응 지배</div>
+        <div class="v">기상반응이 아닌 표면 자기제한 반응이 지배한다. <b>저압일수록 흡착·탈착 평형이 탈착 쪽으로 쉬워지고 부산물 제거가 원활</b>해져, 동일 반응이 더 낮은 온도에서도 진행될 수 있다 → 저압 공정은 반응온도를 낮추는 경향.</div>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <div class="k">불변량: 활성화 에너지</div>
+        <div class="v">압력·농도가 바뀌어도 <b>흡착·탈착·리간드 교환·확산 각 소반응의 Ea — 즉 물질이 반응하기 위해 넘어야 하는 임계 에너지 — 는 변하지 않는다.</b> 변하는 것은 빈도(전지수 인자, flux)와 평형 위치다. 이 불변성이야말로 "구조적으로 유사한 소재로부터 증착특성을 이식 추정"하는 전략의 화학적 정당성이다: 조건이 달라도 Ea 패턴은 분자–표면 조합의 고유 속성으로 보존되므로, 구조가 비슷한 계열은 반응 장벽·휘발성·열안정성·입체장애가 함께 비슷해지고, 그 결과 최종 증착특성이 비슷해진다.</div>
+      </div>
+    </div>
+
+    <table>
+      <thead><tr><th>변수</th><th>압력↓ 시 변화</th><th>예측 모델에의 함의</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">Ea (소반응)</td><td>불변</td><td>구조 기반 transfer의 근거 — 조건 무관 키 변수</td></tr>
+        <tr><td class="mono">표면 flux</td><td>감소 (부분압 비례)</td><td>포화 미달 데이터 필터링 기준</td></tr>
+        <tr><td class="mono">탈착·퍼지</td><td>용이</td><td>저압 보고 Window가 저온 쪽으로 이동 가능 → 조건 메타데이터 보존 필수</td></tr>
+        <tr><td class="mono">반응 온도</td><td>하향 경향</td><td>Window 비교 시 압력 normalize 또는 조건별 군집화</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ───────────────────────── 08 ───────────────────────── -->
+<section id="s8">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">08</span><h2>근거 문헌</h2></div>
+    <p class="lede">본 문서의 핵심 주장(구조 지배성, shape→GPC, ML 열물성 예측, 문헌 DB 가용성)을 뒷받침하는 검증된 출처.</p>
+
+    <div class="ref"><span class="no">[1]</span><strong>AtomicLimits ALD Database</strong> — TU Eindhoven (Kessels 그룹) 큐레이션, crowdsourcing 기반의 thermal/plasma ALD 공정 데이터베이스. 약 3,800개 고유 DOI 규모.
+      <span class="note"><a href="https://www.atomiclimits.com/alddatabase/">atomiclimits.com/alddatabase</a> · 인용 규모 출처: arXiv:2506.17725 (ALD on particulate materials review)</span></div>
+
+    <div class="ref"><span class="no">[2]</span><strong>GPC의 전구체 화학·구조 지배성</strong> — "달성 가능한 최대 GPC는 전구체의 화학과 구조에 의해 지배적으로 결정된다"는 정량 분석.
+      <span class="note">Yim et al., <em>J. Phys. Chem. Lett.</em> 2024 — <a href="https://pubs.acs.org/doi/10.1021/acs.jpclett.4c01632">doi:10.1021/acs.jpclett.4c01632</a></span></div>
+
+    <div class="ref"><span class="no">[3]</span><strong>Shape/Size → GPC 정량 예측</strong> — Random Sequential Adsorption 모델로 전구체 크기·형상만으로 문헌 GPC를 평균 0.05 Å 오차로 재현. RSA 포화 커버리지는 이상 packing 대비 22–40% 낮음 → steric hindrance·surface packing이 GPC의 1차 변수임을 입증.
+      <span class="note"><em>J. Phys. Chem. Lett.</em> 2024 — <a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11284847/">PMC11284847</a></span></div>
+
+    <div class="ref"><span class="no">[4]</span><strong>ML 기반 전구체 휘발성 예측</strong> — 화학정보학 descriptor + RF/NN으로 유기금속 착물의 증발/승화 온도를 평균 ±9°C로 예측 (50개 금속/준금속 대상). 구조 → 열물성 학습의 산업적 선례.
+      <span class="note">Schrödinger Materials Science — <a href="https://www.blog.baldengineering.com/2021/12/how-machine-learning-enables-accurate.html">BALD Engineering 소개 기사</a></span></div>
+
+    <div class="ref"><span class="no">[5]</span><strong>ML × ALD 리뷰</strong> — 공정 최적화·신소재 탐색·반응 메커니즘 규명에서의 ML 적용 현황과, 데이터 희소성·조건 이질성이라는 공통 과제 정리.
+      <span class="note">Westermayr, Bent, Tonner-Zech, "Opportunities and Challenges of Machine Learning in Atomic Layer Deposition", <em>Chem. Mater.</em> 2026, 38(5) — <a href="https://doi.org/10.1021/acs.chemmater.5c03271">doi:10.1021/acs.chemmater.5c03271</a></span></div>
+
+    <div class="ref"><span class="no">[6]</span><strong>ALD 공정·Window 일반론</strong> — 전구체/co-reactant 화학, 자기제한 성장, 공정 개발 가이드라인.
+      <span class="note">"Atomic layer deposition", <em>Nature Reviews Methods Primers</em> 2025 — <a href="https://www.nature.com/articles/s43586-025-00435-6">nature.com/articles/s43586-025-00435-6</a></span></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">ALD Deposition Prediction · Concept v1 · Thermal ALD scope · 2026-06</div>
+</footer>
+
+</body>
+</html>
